@@ -1,22 +1,33 @@
-"""Приём событий Hikvision (HTTP Listening) через FastAPI.
+"""Приём событий Hikvision (HTTP Listening) через FastAPI с сохранением в PostgreSQL.
 
 Настройка камеры: Configuration -> Network -> Advanced -> HTTP Listening
   Адрес: hik-getaway.imbtech.uz, URL: /api/v1/getaway/hikvision, Port: 80, Protocol: HTTP
 """
 import json
 import logging
+import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from starlette.datastructures import UploadFile
 
+from db import init_db, save_event
+
 logger = logging.getLogger("hikvision")
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="Hikvision Gateway")
-
 IMAGES_DIR = Path("images")
 IMAGES_DIR.mkdir(exist_ok=True)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await init_db()
+    yield
+
+
+app = FastAPI(title="Hikvision Gateway", lifespan=lifespan)
 
 
 def parse_text_part(raw: bytes) -> dict | str:
@@ -40,8 +51,10 @@ async def hikvision_webhook(request: Request) -> dict:
             if isinstance(value, UploadFile):
                 data = await value.read()
                 if (value.content_type or "").startswith("image/"):
-                    # basename защищает от выхода за пределы папки
-                    filename = Path(value.filename or f"{name}.jpg").name
+                    # basename защищает от выхода за пределы папки,
+                    # uuid - от перезаписи файлов с одинаковым именем
+                    original = Path(value.filename or f"{name}.jpg").name
+                    filename = f"{uuid.uuid4().hex}_{original}"
                     (IMAGES_DIR / filename).write_bytes(data)
                     saved_images.append(filename)
                 else:
@@ -51,7 +64,12 @@ async def hikvision_webhook(request: Request) -> dict:
     else:
         events.append(parse_text_part(await request.body()))
 
-    logger.info("Hikvision event: %s, images: %s", events, saved_images)
+    try:
+        client_ip = request.client.host if request.client else None
+        await save_event(client_ip, events, saved_images)
+    except Exception:
+        # Ошибка БД не должна приводить к повторной отправке события камерой
+        logger.exception("Failed to save Hikvision event")
 
     # Всегда 200 OK, иначе камера будет повторно слать событие
     return {"status": "ok"}
