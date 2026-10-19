@@ -1,7 +1,7 @@
 """Приём событий Hikvision (HTTP Listening) через FastAPI с сохранением в PostgreSQL.
 
 Настройка камеры: Configuration -> Network -> Advanced -> HTTP Listening
-  Адрес: hik-getaway.imbtech.uz, URL: /api/v1/getaway/hikvision, Port: 80, Protocol: HTTP
+  Адрес: hik-getaway.mado.uz, URL: /api/v1/getaway/hikvision, Port: 80, Protocol: HTTP
 """
 import json
 import logging
