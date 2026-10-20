@@ -1,24 +1,40 @@
 """Приём событий Hikvision (HTTP Listening) через FastAPI с сохранением в PostgreSQL.
 
 Настройка камеры: Configuration -> Network -> Advanced -> HTTP Listening
-  Адрес: hik-getaway.mado.uz, URL: /api/v1/getaway/hikvision, Port: 80, Protocol: HTTP
+  Адрес: hik-getaway.mado.uz, Port: 80, Protocol: HTTP
+  URL: /api/v1/getaway/hikvision?token=<GATEWAY_TOKEN>
+
+Запросы без верного токена отклоняются с кодом 401. Токен принимается:
+  - в заголовке X-Gateway-Token (предпочтительно),
+  - или в параметре URL ?token=... (для камер, которые не умеют свои заголовки).
 
 Сохраняется всё, что присылает камера: заголовки, сырое тело, все части
-multipart (JSON/XML и файлы любого типа).
+multipart (JSON/XML и файлы любого типа). Сам токен в базу не попадает.
 """
+import hmac
 import json
 import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlencode
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from starlette.datastructures import UploadFile
 
 from db import init_db, save_event
 
 logger = logging.getLogger("hikvision")
 logging.basicConfig(level=logging.INFO)
+
+GATEWAY_TOKEN = os.environ.get("GATEWAY_TOKEN", "")
+if not GATEWAY_TOKEN:
+    # Без токена шлюз был бы открыт всем, поэтому не запускаемся вовсе
+    raise RuntimeError("Переменная окружения GATEWAY_TOKEN обязательна")
+
+TOKEN_HEADER = "x-gateway-token"
+TOKEN_PARAM = "token"
 
 FILES_DIR = Path("images")
 FILES_DIR.mkdir(exist_ok=True)
@@ -33,6 +49,25 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Hikvision Gateway", lifespan=lifespan)
+
+
+def verify_token(request: Request) -> None:
+    supplied = request.headers.get(TOKEN_HEADER) or request.query_params.get(TOKEN_PARAM) or ""
+    # compare_digest сравнивает за постоянное время и не даёт подбирать токен по задержке
+    if not hmac.compare_digest(supplied.encode(), GATEWAY_TOKEN.encode()):
+        client_ip = request.client.host if request.client else None
+        logger.warning("Rejected request with invalid token from %s", client_ip)
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def safe_headers(request: Request) -> dict[str, str]:
+    # Токен не должен оседать в базе
+    return {k: v for k, v in request.headers.items() if k.lower() != TOKEN_HEADER}
+
+
+def safe_query(request: Request) -> str:
+    pairs = [(k, v) for k, v in request.query_params.multi_items() if k != TOKEN_PARAM]
+    return urlencode(pairs)
 
 
 def decode_text(raw: bytes) -> str:
@@ -89,7 +124,7 @@ async def read_multipart(request: Request) -> tuple[list, list, list[str]]:
     return parts, payload, files
 
 
-@app.post("/api/v1/getaway/hikvision")
+@app.post("/api/v1/getaway/hikvision", dependencies=[Depends(verify_token)])
 async def hikvision_webhook(request: Request) -> dict:
     content_type = request.headers.get("content-type", "")
     parts: list = []
@@ -113,9 +148,9 @@ async def hikvision_webhook(request: Request) -> dict:
             client_ip=client_ip,
             method=request.method,
             path=request.url.path,
-            query=request.url.query,
+            query=safe_query(request),
             content_type=content_type,
-            headers=dict(request.headers),
+            headers=safe_headers(request),
             raw_body=raw_body,
             parts=parts,
             payload=payload,
@@ -126,5 +161,5 @@ async def hikvision_webhook(request: Request) -> dict:
         # Ошибка разбора или БД не должна приводить к повторной отправке события
         logger.exception("Failed to process Hikvision event")
 
-    # Всегда 200 OK, иначе камера будет повторно слать событие
+    # Всегда 200 OK (для авторизованных запросов), иначе камера будет повторно слать событие
     return {"status": "ok"}

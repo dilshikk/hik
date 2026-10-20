@@ -1,0 +1,24 @@
+# Секреты и локальные настройки
+.env
+.env.*
+!.env.example
+
+# Данные, которые создаёт шлюз и скрипт опроса
+images/
+tools/last_time.txt
+last_time.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Редакторы и ОС
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
