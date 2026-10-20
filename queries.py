@@ -11,10 +11,16 @@ NO_TYPE = "__none__"
 NO_TYPE_LABEL = "(без типа)"
 
 # Где в payload искать название устройства (по порядку). Если ни одного поля
-# нет, берём IP отправителя. Список можно поправить под реальные события.
-DEVICE_FIELDS = ("deviceName", "devName", "ipAddress", "srcName")
-_first_item = HikEvent.payload[0]
-DEVICE = func.coalesce(*[_first_item[field].astext for field in DEVICE_FIELDS], HikEvent.client_ip)
+# нет, берём IP отправителя. У контроллеров доступа имя лежит внутри
+# AccessControllerEvent (например, "MADO"), а на верхнем уровне только IP.
+DEVICE_PATHS = (
+    (0, "AccessControllerEvent", "deviceName"),
+    (0, "deviceName"),
+    (0, "devName"),
+    (0, "srcName"),
+    (0, "ipAddress"),
+)
+DEVICE = func.coalesce(*[HikEvent.payload[path].astext for path in DEVICE_PATHS], HikEvent.client_ip)
 
 
 @dataclass(frozen=True)
