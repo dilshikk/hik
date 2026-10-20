@@ -65,14 +65,14 @@ async def events(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     before_id: int | None = None,
     after_id: int | None = None,
-    event_type: Annotated[str | None, Query(max_length=128)] = None,
+    action: Annotated[str | None, Query(max_length=16)] = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     q: Annotated[str | None, Query(max_length=200)] = None,
     with_images: bool = False,
 ) -> dict:
     filters = EventFilters(
-        event_type=event_type,
+        action=action,
         date_from=as_utc(date_from),
         date_to=as_utc(date_to),
         query=q.strip() if q else None,
