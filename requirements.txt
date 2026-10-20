@@ -3,3 +3,4 @@ uvicorn[standard]
 python-multipart
 sqlalchemy[asyncio]>=2.0
 asyncpg
+httpx
