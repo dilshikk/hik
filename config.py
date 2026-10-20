@@ -9,3 +9,7 @@ FILES_DIR.mkdir(exist_ok=True)
 # Токен панели. Он отдельный от GATEWAY_TOKEN: тот лежит в адресе камеры
 # и может попасть в логи прокси, а этот открывает доступ к самим данным.
 DASHBOARD_TOKEN = os.environ.get("DASHBOARD_TOKEN", "")
+
+# База посещаемости FaceID (resto). Если не задана, пересылка отключена.
+# Формат: postgresql+asyncpg://user:password@host:5432/dbname
+ATTENDANCE_DATABASE_URL = os.environ.get("ATTENDANCE_DATABASE_URL", "")
