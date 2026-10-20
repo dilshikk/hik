@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Hikvision: события</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f5f6f8; --card: #ffffff; --text: #1c2330; --muted: #667085; --border: #e1e5eb;
+  --accent: #0b7a75; --accent-text: #ffffff; --hover: #eef3f3; --danger: #c0392b; --fresh: #d7f3ef;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12161c; --card: #1a2029; --text: #e6e9ee; --muted: #93a0b2; --border: #2a3340;
+    --accent: #2bb3aa; --accent-text: #08201e; --hover: #202a35; --danger: #ff7b6b; --fresh: #17413d;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+h1 { font-size: 18px; margin: 0; }
+h2 { font-size: 15px; margin: 0 0 12px; }
+h3 { font-size: 14px; margin: 0 0 8px; }
+.muted { color: var(--muted); }
+.error { color: var(--danger); min-height: 1.4em; margin: 8px 0; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+input:focus-visible, select:focus-visible, button:focus-visible, tr:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn { font: inherit; color: var(--text); background: var(--hover); border: 1px solid var(--border); border-radius: 8px; padding: 7px 14px; cursor: pointer; text-decoration: none; display: inline-block; }
+.btn:disabled { opacity: .55; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+.login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+.login-card { width: 100%; max-width: 360px; display: grid; gap: 12px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 12px 20px; background: var(--card); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
+.tabs { display: flex; gap: 4px; }
+.tab { font: inherit; color: var(--muted); background: none; border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.tab.active { background: var(--hover); color: var(--text); font-weight: 600; }
+.top-right { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+main { max-width: 1200px; margin: 0 auto; padding: 16px 20px 40px; display: grid; gap: 14px; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.filters label:not(.check) { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+#f-q { flex: 1 1 240px; }
+.table-wrap { padding: 0; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+thead th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+tbody tr.row { cursor: pointer; }
+tbody tr.row:hover { background: var(--hover); }
+.nowrap { white-space: nowrap; }
+.empty { padding: 28px; text-align: center; color: var(--muted); }
+.fresh { animation: fresh 3s ease-out; }
+@keyframes fresh { from { background: var(--fresh); } to { background: transparent; } }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.stat-n { font-size: 26px; font-weight: 650; overflow-wrap: anywhere; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.vbars { display: flex; gap: 2px; height: 220px; align-items: stretch; }
+.vbar { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
+.vtrack { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+.vfill { width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; }
+.vval, .vlabel { font-size: 10px; color: var(--muted); height: 14px; line-height: 14px; white-space: nowrap; }
+.hrow { display: grid; grid-template-columns: minmax(80px, 38%) 1fr auto; gap: 10px; align-items: center; padding: 4px 0; }
+.hname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.htrack { background: var(--hover); border-radius: 4px; height: 12px; overflow: hidden; }
+.hfill { background: var(--accent); height: 100%; }
+dialog { width: min(920px, 96vw); max-height: 92vh; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--text); }
+dialog::backdrop { background: rgba(0, 0, 0, .55); }
+.dlg-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--card); }
+.dlg-body { padding: 16px; display: grid; gap: 18px; }
+.kv th { width: 170px; color: var(--muted); font-weight: 500; text-transform: none; font-size: 13px; letter-spacing: 0; }
+.kv td { overflow-wrap: anywhere; }
+pre { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; max-height: 340px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+details { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+summary { cursor: pointer; font-weight: 600; }
+details > :not(summary) { margin-top: 10px; }
+.part { display: grid; gap: 8px; padding: 10px 0; border-top: 1px dashed var(--border); }
+.files { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.file { margin: 0; display: grid; gap: 6px; align-content: start; }
+.file-body { min-height: 60px; display: grid; place-items: center; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px; }
+.thumb { max-width: 100%; max-height: 260px; border-radius: 6px; cursor: zoom-in; }
+.file figcaption { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <form id="login-form" class="card login-card">
+    <h1>Панель событий Hikvision</h1>
+    <p class="muted" style="margin:0">Введите токен панели (DASHBOARD_TOKEN).</p>
+    <input id="login-token" type="password" autocomplete="current-password" placeholder="Токен панели" required>
+    <button type="submit" class="btn primary">Войти</button>
+    <p id="login-error" class="error" role="alert" style="margin:0"></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <h1>События Hikvision</h1>
+    <nav class="tabs">
+      <button id="tab-btn-events" class="tab active" type="button">События</button>
+      <button id="tab-btn-stats" class="tab" type="button">Статистика</button>
+    </nav>
+    <div class="top-right">
+      <label class="check"><input type="checkbox" id="auto" checked> Автообновление</label>
+      <span id="status" class="muted"></span>
+      <span id="tz" class="muted"></span>
+      <button id="logout" class="btn" type="button">Выйти</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="error" class="error" role="alert"></div>
+
+    <section id="tab-events" style="display:grid;gap:14px">
+      <div class="filters card">
+        <input id="f-q" type="search" placeholder="Поиск по тексту события, IP, типу">
+        <select id="f-type" aria-label="Тип события"></select>
+        <label>С <input id="f-from" type="datetime-local"></label>
+        <label>По <input id="f-to" type="datetime-local"></label>
+        <label class="check"><input id="f-images" type="checkbox"> Только с фото</label>
+        <button id="f-reset" class="btn" type="button">Сбросить</button>
+      </div>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>№</th><th>Время</th><th>Тип</th><th>Устройство</th><th>IP</th><th>Файлы</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div id="empty" class="empty" hidden>Событий не найдено</div>
+      </div>
+      <div><button id="more" class="btn" type="button" hidden>Загрузить ещё</button></div>
+    </section>
+
+    <section id="tab-stats" hidden style="display:grid;gap:14px">
+      <div class="filters">
+        <label>Период
+          <select id="s-period">
+            <option value="24">24 часа</option>
+            <option value="168">7 дней</option>
+            <option value="720">30 дней</option>
+          </select>
+        </label>
+      </div>
+      <div id="cards" class="cards"></div>
+      <div class="card"><h2>События по времени</h2><div id="chart-time"></div></div>
+      <div class="grid2">
+        <div class="card"><h2>По типам</h2><div id="chart-type"></div></div>
+        <div class="card"><h2>По устройствам</h2><div id="chart-device"></div></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog id="modal">
+  <div class="dlg-head">
+    <h2 id="modal-title" style="margin:0"></h2>
+    <button id="modal-close" class="btn" type="button">Закрыть</button>
+  </div>
+  <div id="modal-body" class="dlg-body"></div>
+</dialog>
+
+<script>
+"use strict";
+
+const TOKEN_KEY = "dashboardToken";
+const POLL_MS = 5000;
+const STATS_POLL_MS = 30000;
+const PAGE_SIZE = 50;
+const MAX_ROWS = 500;
+const NO_TYPE = "__none__";
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp)$/i;
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+const state = {
+  token: sessionStorage.getItem(TOKEN_KEY) || "",
+  events: [],
+  hasMore: false,
+  generation: 0,
+  tab: "events",
+  ticking: false,
+  statsAt: 0,
+  knownTypes: new Set(),
+  blobUrls: [],
+};
+
+const $ = (id) => document.getElementById(id);
+
+class AuthError extends Error {}
+
+// Все данные от устройств добавляются только как текст (append строки),
+// innerHTML нигде не используется, поэтому вставить разметку через событие нельзя.
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (key === "class") node.className = value;
+    else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+    else node.setAttribute(key, value);
+  }
+  for (const child of children.flat()) {
+    if (child !== null && child !== undefined) node.append(child);
+  }
+  return node;
+}
+
+async function apiFetch(path, params = {}, asBlob = false) {
+  const url = new URL(path, location.origin);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== "" && value !== null && value !== undefined && value !== false) {
+      url.searchParams.set(key, String(value));
+    }
+  }
+  const res = await fetch(url, { headers: { "X-Dashboard-Token": state.token }, cache: "no-store" });
+  if (res.status === 401) {
+    logout("Неверный токен");
+    throw new AuthError();
+  }
+  if (res.status === 503) throw new Error("Панель отключена на сервере: не задан DASHBOARD_TOKEN");
+  if (!res.ok) throw new Error("Ошибка сервера: " + res.status);
+  return asBlob ? res.blob() : res.json();
+}
+
+function showError(err) {
+  if (err instanceof AuthError) return;
+  $("error").textContent = err instanceof Error ? err.message : String(err);
+}
+const clearError = () => { $("error").textContent = ""; };
+
+function markUpdated() {
+  $("status").textContent = "Обновлено " + new Date().toLocaleTimeString("ru-RU");
+}
+
+const fmtTime = (iso) => new Date(iso).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "medium" });
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + " Б";
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " КБ";
+  return (bytes / 1048576).toFixed(1) + " МБ";
+}
+
+const displayName = (stored) => stored.replace(/^[0-9a-f]{32}_/, "");
+
+/* ---------- вход и выход ---------- */
+
+function logout(message = "") {
+  state.token = "";
+  sessionStorage.removeItem(TOKEN_KEY);
+  $("app").hidden = true;
+  $("login").hidden = false;
+  $("login-error").textContent = message;
+}
+
+async function enter() {
+  try {
+    await loadTypes();
+  } catch (err) {
+    if (!(err instanceof AuthError)) $("login-error").textContent = err.message;
+    return;
+  }
+  sessionStorage.setItem(TOKEN_KEY, state.token);
+  $("login").hidden = true;
+  $("app").hidden = false;
+  $("tz").textContent = "Часовой пояс: " + TZ;
+  await reloadEvents();
+}
+
+$("login-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  state.token = $("login-token").value.trim();
+  $("login-token").value = "";
+  $("login-error").textContent = "";
+  enter();
+});
+$("logout").addEventListener("click", () => logout());
+
+/* ---------- список событий ---------- */
+
+function isoOrEmpty(localValue) {
+  if (!localValue) return "";
+  const date = new Date(localValue);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
+function currentFilters() {
+  return {
+    q: $("f-q").value.trim(),
+    event_type: $("f-type").value,
+    date_from: isoOrEmpty($("f-from").value),
+    date_to: isoOrEmpty($("f-to").value),
+    with_images: $("f-images").checked,
+  };
+}
+
+function rowNode(ev, fresh) {
+  const tr = el("tr", { class: "row" + (fresh ? " fresh" : ""), tabindex: "0" },
+    el("td", {}, String(ev.id)),
+    el("td", { class: "nowrap" }, fmtTime(ev.received_at)),
+    el("td", {}, ev.event_type || "—"),
+    el("td", {}, ev.device || "—"),
+    el("td", {}, ev.client_ip || "—"),
+    el("td", {}, ev.images.length ? String(ev.images.length) : ""),
+  );
+  tr.addEventListener("click", () => openEvent(ev.id));
+  tr.addEventListener("keydown", (e) => { if (e.key === "Enter") openEvent(ev.id); });
+  return tr;
+}
+
+function updateListState() {
+  $("empty").hidden = state.events.length > 0;
+  $("more").hidden = !state.hasMore;
+}
+
+async function reloadEvents() {
+  const gen = ++state.generation;
+  try {
+    const data = await apiFetch("/dashboard/api/events", { ...currentFilters(), limit: PAGE_SIZE });
+    if (gen !== state.generation) return;
+    state.events = data.events;
+    state.hasMore = data.has_more;
+    $("rows").replaceChildren(...state.events.map((ev) => rowNode(ev, false)));
+    updateListState();
+    clearError();
+    markUpdated();
+  } catch (err) {
+    showError(err);
+  }
+}
+
+async function loadMore() {
+  const gen = state.generation;
+  const last = state.events[state.events.length - 1];
+  if (!last) return;
+  $("more").disabled = true;
+  try {
+    const data = await apiFetch("/dashboard/api/events", { ...currentFilters(), limit: PAGE_SIZE, before_id: last.id });
+    if (gen !== state.generation) return;
+    state.events.push(...data.events);
+    state.hasMore = data.has_more;
+    $("rows").append(...data.events.map((ev) => rowNode(ev, false)));
+    updateListState();
+  } catch (err) {
+    showError(err);
+  } finally {
+    $("more").disabled = false;
+  }
+}
+
+function prependEvents(batchNewestFirst) {
+  state.events = [...batchNewestFirst, ...state.events];
+  $("rows").prepend(...batchNewestFirst.map((ev) => rowNode(ev, true)));
+  if (state.events.length > MAX_ROWS) {
+    state.events.length = MAX_ROWS;
+    while ($("rows").children.length > MAX_ROWS) $("rows").lastChild.remove();
+    state.hasMore = true;
+  }
+  updateListState();
+  if (batchNewestFirst.some((ev) => ev.event_type && !state.knownTypes.has(ev.event_type))) {
+    loadTypes().catch(showError);
+  }
+}
+
+// Забираем всё, что новее самого свежего события в списке, пачками по 100
+async function pollNew() {
+  const gen = state.generation;
+  let cursor = state.events.length ? state.events[0].id : 0;
+  let more = true;
+  while (more) {
+    const data = await apiFetch("/dashboard/api/events", { ...currentFilters(), limit: 100, after_id: cursor });
+    if (gen !== state.generation) return;
+    if (data.events.length) {
+      cursor = data.events[data.events.length - 1].id;
+      prependEvents(data.events.slice().reverse());
+    }
+    more = data.has_more;
+  }
+}
+
+async function loadTypes() {
+  const data = await apiFetch("/dashboard/api/types");
+  const select = $("f-type");
+  const selected = select.value;
+  state.knownTypes = new Set(data.types.map((t) => t.name));
+  const options = [
+    el("option", { value: "" }, "Все типы"),
+    el("option", { value: NO_TYPE }, "(без типа)"),
+    ...data.types.map((t) => el("option", { value: t.name }, `${t.name} (${t.count})`)),
+  ];
+  select.replaceChildren(...options);
+  select.value = [...select.options].some((o) => o.value === selected) ? selected : "";
+}
+
+let searchTimer = 0;
+$("f-q").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(reloadEvents, 400);
+});
+for (const id of ["f-type", "f-from", "f-to", "f-images"]) $(id).addEventListener("change", reloadEvents);
+$("f-reset").addEventListener("click", () => {
+  $("f-q").value = "";
+  $("f-type").value = "";
+  $("f-from").value = "";
+  $("f-to").value = "";
+  $("f-images").checked = false;
+  reloadEvents();
+});
+$("more").addEventListener("click", loadMore);
+
+/* ---------- подробности события ---------- */
+
+function kvTable(entries) {
+  const table = el("table", { class: "kv" });
+  for (const [key, value] of entries) {
+    if (value === null || value === undefined || value === "") continue;
+    table.append(el("tr", {}, el("th", {}, key), el("td", {}, String(value))));
+  }
+  return table;
+}
+
+const section = (title, ...content) => el("section", {}, el("h3", {}, title), ...content);
+const collapsible = (title, ...content) => el("details", {}, el("summary", {}, title), ...content);
+const pre = (text) => el("pre", {}, text);
+const itemText = (item) => (typeof item === "string" ? item : JSON.stringify(item, null, 2));
+
+async function loadFile(storedName, holder) {
+  try {
+    const blob = await apiFetch("/dashboard/api/files/" + encodeURIComponent(storedName), {}, true);
+    const url = URL.createObjectURL(blob);
+    state.blobUrls.push(url);
+    const name = displayName(storedName);
+    if (IMAGE_EXT.test(storedName)) {
+      holder.replaceChildren(el("img", {
+        src: url, alt: name, class: "thumb", title: "Открыть в новой вкладке",
+        onclick: () => window.open(url, "_blank", "noopener"),
+      }));
+    } else {
+      holder.replaceChildren(el("a", { href: url, download: name, class: "btn" }, "Скачать"));
+    }
+  } catch (err) {
+    holder.textContent = err instanceof AuthError ? "Нет доступа" : "Файл недоступен";
+  }
+}
+
+function fileCard(storedName) {
+  const holder = el("div", { class: "file-body muted" }, "Загрузка...");
+  loadFile(storedName, holder);
+  return el("figure", { class: "file" }, holder, el("figcaption", {}, displayName(storedName)));
+}
+
+function partNode(part) {
+  return el("div", { class: "part" },
+    kvTable([
+      ["Имя поля", part.name],
+      ["Файл", part.filename],
+      ["Тип", part.content_type],
+      ["Размер", typeof part.size === "number" ? fmtSize(part.size) : null],
+      ["Сохранён как", part.file ? displayName(part.file) : null],
+    ]),
+    part.text ? pre(part.text) : null,
+  );
+}
+
+function detailNodes(ev) {
+  const nodes = [
+    section("Общее", kvTable([
+      ["Получено", fmtTime(ev.received_at)],
+      ["Тип события", ev.event_type],
+      ["IP отправителя", ev.client_ip],
+      ["Метод", ev.method],
+      ["Путь", ev.path],
+      ["Параметры", ev.query],
+      ["Content-Type", ev.content_type],
+    ])),
+  ];
+  if (ev.images.length) nodes.push(section(`Фото и файлы (${ev.images.length})`, el("div", { class: "files" }, ev.images.map(fileCard))));
+  if (ev.payload.length) nodes.push(section(`Данные события (${ev.payload.length})`, el("div", { style: "display:grid;gap:8px" }, ev.payload.map((item) => pre(itemText(item))))));
+  if (ev.parts.length) nodes.push(section(`Части multipart (${ev.parts.length})`, ev.parts.map(partNode)));
+  const headers = Object.entries(ev.headers);
+  if (headers.length) nodes.push(collapsible(`Заголовки (${headers.length})`, kvTable(headers)));
+  if (ev.raw_body) nodes.push(collapsible("Сырое тело запроса", pre(ev.raw_body)));
+  return nodes;
+}
+
+async function openEvent(id) {
+  const body = $("modal-body");
+  $("modal-title").textContent = "Событие №" + id;
+  body.replaceChildren(el("p", { class: "muted" }, "Загрузка..."));
+  if (!$("modal").open) $("modal").showModal();
+  try {
+    const ev = await apiFetch("/dashboard/api/events/" + id);
+    body.replaceChildren(...detailNodes(ev));
+  } catch (err) {
+    body.replaceChildren(el("p", { class: "error" }, err instanceof Error ? err.message : "Ошибка"));
+  }
+}
+
+$("modal-close").addEventListener("click", () => $("modal").close());
+$("modal").addEventListener("click", (e) => { if (e.target === $("modal")) $("modal").close(); });
+$("modal").addEventListener("close", () => {
+  state.blobUrls.forEach((url) => URL.revokeObjectURL(url));
+  state.blobUrls = [];
+});
+
+/* ---------- статистика ---------- */
+
+function bucketStart(date, daily) {
+  const d = new Date(date);
+  if (daily) d.setHours(0, 0, 0, 0);
+  else d.setMinutes(0, 0, 0);
+  return d;
+}
+
+// Сервер отдаёт часы в UTC; раскладываем их по местным часам (до 48 ч) или местным суткам
+function buildBuckets(rows, hours) {
+  const daily = hours > 48;
+  const counts = new Map();
+  for (const row of rows) {
+    const key = bucketStart(row.hour, daily).getTime();
+    counts.set(key, (counts.get(key) || 0) + row.count);
+  }
+  const steps = daily ? Math.ceil(hours / 24) : hours;
+  const cursor = bucketStart(new Date(), daily);
+  const list = [];
+  for (let i = 0; i < steps; i++) {
+    list.push({ key: cursor.getTime(), date: new Date(cursor) });
+    if (daily) cursor.setDate(cursor.getDate() - 1);
+    else cursor.setHours(cursor.getHours() - 1);
+  }
+  return list.reverse().map((b) => ({
+    label: daily
+      ? b.date.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })
+      : String(b.date.getHours()).padStart(2, "0"),
+    title: b.date.toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" }),
+    value: counts.get(b.key) || 0,
+  }));
+}
+
+function verticalBars(items) {
+  const max = Math.max(1, ...items.map((i) => i.value));
+  const every = items.length > 24 ? 5 : items.length > 12 ? 3 : 1;
+  return el("div", { class: "vbars" }, items.map((item, idx) => {
+    const fill = el("div", { class: "vfill" });
+    fill.style.height = item.value ? `max(2px, ${(item.value / max) * 100}%)` : "0";
+    return el("div", { class: "vbar", title: `${item.title}: ${item.value}` },
+      el("span", { class: "vval" }, item.value ? String(item.value) : ""),
+      el("div", { class: "vtrack" }, fill),
+      el("span", { class: "vlabel" }, idx % every === 0 ? item.label : ""),
+    );
+  }));
+}
+
+function horizontalBars(items) {
+  if (!items.length) return el("p", { class: "muted" }, "Нет данных за период");
+  const max = Math.max(1, ...items.map((i) => i.count));
+  return el("div", {}, items.map((item) => {
+    const fill = el("div", { class: "hfill" });
+    fill.style.width = `${(item.count / max) * 100}%`;
+    return el("div", { class: "hrow" },
+      el("span", { class: "hname", title: item.name }, item.name),
+      el("div", { class: "htrack" }, fill),
+      el("span", {}, String(item.count)),
+    );
+  }));
+}
+
+function statCard(value, label) {
+  return el("div", { class: "card" }, el("div", { class: "stat-n" }, value), el("div", { class: "muted" }, label));
+}
+
+async function loadStats() {
+  const hours = Number($("s-period").value);
+  const data = await apiFetch("/dashboard/api/stats", { hours });
+  state.statsAt = Date.now();
+  $("cards").replaceChildren(
+    statCard(String(data.total), "Событий за период"),
+    statCard(String(data.by_type.length), "Типов событий"),
+    statCard(data.by_device.length ? data.by_device[0].name : "—", "Самое активное устройство"),
+  );
+  $("chart-time").replaceChildren(verticalBars(buildBuckets(data.by_hour, hours)));
+  $("chart-type").replaceChildren(horizontalBars(data.by_type));
+  $("chart-device").replaceChildren(horizontalBars(data.by_device));
+  markUpdated();
+}
+
+$("s-period").addEventListener("change", () => loadStats().catch(showError));
+
+/* ---------- вкладки и автообновление ---------- */
+
+function showTab(name) {
+  state.tab = name;
+  $("tab-events").hidden = name !== "events";
+  $("tab-stats").hidden = name !== "stats";
+  $("tab-btn-events").classList.toggle("active", name === "events");
+  $("tab-btn-stats").classList.toggle("active", name === "stats");
+  clearError();
+  if (name === "stats") loadStats().catch(showError);
+}
+$("tab-btn-events").addEventListener("click", () => showTab("events"));
+$("tab-btn-stats").addEventListener("click", () => showTab("stats"));
+
+async function tick() {
+  if (!$("auto").checked || document.hidden || $("app").hidden || state.ticking) return;
+  state.ticking = true;
+  try {
+    if (state.tab === "events") {
+      await pollNew();
+      markUpdated();
+    } else if (Date.now() - state.statsAt > STATS_POLL_MS) {
+      await loadStats();
+    }
+    clearError();
+  } catch (err) {
+    showError(err);
+  } finally {
+    state.ticking = false;
+  }
+}
+setInterval(tick, POLL_MS);
+
+if (state.token) enter();
+</script>
+</body>
+</html>

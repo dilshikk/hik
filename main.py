@@ -10,6 +10,8 @@
 
 Сохраняется всё, что присылает камера: заголовки, сырое тело, все части
 multipart (JSON/XML и файлы любого типа). Сам токен в базу не попадает.
+
+Панель просмотра событий: /dashboard (доступ по DASHBOARD_TOKEN, см. dashboard.py).
 """
 import hmac
 import json
@@ -23,6 +25,8 @@ from urllib.parse import urlencode
 from fastapi import Depends, FastAPI, HTTPException, Request
 from starlette.datastructures import UploadFile
 
+from config import FILES_DIR
+from dashboard import router as dashboard_router
 from db import init_db, save_event
 
 logger = logging.getLogger("hikvision")
@@ -36,9 +40,6 @@ if not GATEWAY_TOKEN:
 TOKEN_HEADER = "x-gateway-token"
 TOKEN_PARAM = "token"
 
-FILES_DIR = Path("images")
-FILES_DIR.mkdir(exist_ok=True)
-
 TEXT_TYPES = ("application/json", "application/xml", "text/")
 
 
@@ -49,6 +50,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Hikvision Gateway", lifespan=lifespan)
+app.include_router(dashboard_router)
 
 
 def verify_token(request: Request) -> None:
