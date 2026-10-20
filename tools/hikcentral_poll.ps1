@@ -4,6 +4,8 @@ $HikHost   = "127.0.0.1"
 $AppKey    = "16342390"
 $AppSecret = "ВСТАВЬТЕ_СЕКРЕТ_СЮДА"
 $Gateway   = "http://hik-getaway.mado.uz/api/v1/getaway/hikvision"
+# Должен совпадать с GATEWAY_TOKEN на сервере шлюза
+$GatewayToken = "ВСТАВЬТЕ_ТОКЕН_ШЛЮЗА_СЮДА"
 $Path      = "/artemis/api/acs/v1/door/events"
 $StateFile = Join-Path $PSScriptRoot "last_time.txt"
 
@@ -50,6 +52,7 @@ while ($true) {
       foreach ($e in $list) {
         $json = $e | ConvertTo-Json -Depth 10
         Invoke-RestMethod -Method Post -Uri $Gateway -ContentType "application/json; charset=utf-8" `
+          -Headers @{ "X-Gateway-Token" = $GatewayToken } `
           -Body ([Text.Encoding]::UTF8.GetBytes($json)) | Out-Null
       }
       Write-Host "$(Get-Date -f s) страница $page, событий: $(@($list).Count)"
