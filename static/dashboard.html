@@ -124,7 +124,11 @@ details > :not(summary) { margin-top: 10px; }
     <section id="tab-events" style="display:grid;gap:14px">
       <div class="filters card">
         <input id="f-q" type="search" placeholder="Поиск по имени, номеру сотрудника, устройству">
-        <select id="f-type" aria-label="Тип события"></select>
+        <select id="f-action" aria-label="Действие">
+          <option value="">Все действия</option>
+          <option value="in">Вход</option>
+          <option value="out">Выход</option>
+        </select>
         <label>С <input id="f-from" type="datetime-local"></label>
         <label>По <input id="f-to" type="datetime-local"></label>
         <label class="check"><input id="f-images" type="checkbox" checked> Только с фото</label>
@@ -177,7 +181,6 @@ const POLL_MS = 5000;
 const STATS_POLL_MS = 30000;
 const PAGE_SIZE = 50;
 const MAX_ROWS = 500;
-const NO_TYPE = "__none__";
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp)$/i;
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -210,7 +213,6 @@ const state = {
   tab: "events",
   ticking: false,
   statsAt: 0,
-  knownTypes: new Set(),
   blobUrls: [],
   thumbs: new Map(),
 };
@@ -292,7 +294,8 @@ function logout(message = "") {
 
 async function enter() {
   try {
-    await loadTypes();
+    // Любой лёгкий авторизованный запрос, чтобы проверить токен перед входом
+    await apiFetch("/dashboard/api/events", { limit: 1 });
   } catch (err) {
     if (!(err instanceof AuthError)) $("login-error").textContent = err.message;
     return;
@@ -363,7 +366,7 @@ function isoOrEmpty(localValue) {
 function currentFilters() {
   return {
     q: $("f-q").value.trim(),
-    event_type: $("f-type").value,
+    action: $("f-action").value,
     date_from: isoOrEmpty($("f-from").value),
     date_to: isoOrEmpty($("f-to").value),
     with_images: $("f-images").checked,
@@ -439,9 +442,6 @@ function prependEvents(batchNewestFirst) {
     state.hasMore = true;
   }
   updateListState();
-  if (batchNewestFirst.some((ev) => ev.event_type && !state.knownTypes.has(ev.event_type))) {
-    loadTypes().catch(showError);
-  }
 }
 
 // Забираем всё, что новее самого свежего события в списке, пачками по 100
@@ -460,29 +460,15 @@ async function pollNew() {
   }
 }
 
-async function loadTypes() {
-  const data = await apiFetch("/dashboard/api/types");
-  const select = $("f-type");
-  const selected = select.value;
-  state.knownTypes = new Set(data.types.map((t) => t.name));
-  const options = [
-    el("option", { value: "" }, "Все типы"),
-    el("option", { value: NO_TYPE }, "(без типа)"),
-    ...data.types.map((t) => el("option", { value: t.name }, `${t.name} (${t.count})`)),
-  ];
-  select.replaceChildren(...options);
-  select.value = [...select.options].some((o) => o.value === selected) ? selected : "";
-}
-
 let searchTimer = 0;
 $("f-q").addEventListener("input", () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(reloadEvents, 400);
 });
-for (const id of ["f-type", "f-from", "f-to", "f-images"]) $(id).addEventListener("change", reloadEvents);
+for (const id of ["f-action", "f-from", "f-to", "f-images"]) $(id).addEventListener("change", reloadEvents);
 $("f-reset").addEventListener("click", () => {
   $("f-q").value = "";
-  $("f-type").value = "";
+  $("f-action").value = "";
   $("f-from").value = "";
   $("f-to").value = "";
   // По умолчанию показываем только события с фото
