@@ -10,11 +10,13 @@
   color-scheme: light dark;
   --bg: #f5f6f8; --card: #ffffff; --text: #1c2330; --muted: #667085; --border: #e1e5eb;
   --accent: #0b7a75; --accent-text: #ffffff; --hover: #eef3f3; --danger: #c0392b; --fresh: #d7f3ef;
+  --in-bg: #dcf5e4; --in-fg: #14683a; --out-bg: #fde8cf; --out-fg: #8a4a06; --other-bg: #e6e9ee; --other-fg: #41506a;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #12161c; --card: #1a2029; --text: #e6e9ee; --muted: #93a0b2; --border: #2a3340;
     --accent: #2bb3aa; --accent-text: #08201e; --hover: #202a35; --danger: #ff7b6b; --fresh: #17413d;
+    --in-bg: #16402a; --in-fg: #7ee0a5; --out-bg: #4a3314; --out-fg: #ffc27a; --other-bg: #2a3340; --other-fg: #b6c2d6;
   }
 }
 * { box-sizing: border-box; }
@@ -45,11 +47,17 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px 20px 40px; display: grid
 #f-q { flex: 1 1 240px; }
 .table-wrap { padding: 0; overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; }
-th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 thead th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
 tbody tr.row { cursor: pointer; }
 tbody tr.row:hover { background: var(--hover); }
 .nowrap { white-space: nowrap; }
+.name { font-weight: 600; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: var(--other-bg); color: var(--other-fg); }
+.badge.in { background: var(--in-bg); color: var(--in-fg); }
+.badge.out { background: var(--out-bg); color: var(--out-fg); }
+.mini-box { width: 56px; height: 56px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); display: grid; place-items: center; overflow: hidden; font-size: 11px; color: var(--muted); text-align: center; }
+.mini { width: 100%; height: 100%; object-fit: cover; display: block; }
 .empty { padding: 28px; text-align: center; color: var(--muted); }
 .fresh { animation: fresh 3s ease-out; }
 @keyframes fresh { from { background: var(--fresh); } to { background: transparent; } }
@@ -115,19 +123,20 @@ details > :not(summary) { margin-top: 10px; }
 
     <section id="tab-events" style="display:grid;gap:14px">
       <div class="filters card">
-        <input id="f-q" type="search" placeholder="Поиск по тексту события, IP, типу">
+        <input id="f-q" type="search" placeholder="Поиск по имени, номеру сотрудника, устройству">
         <select id="f-type" aria-label="Тип события"></select>
         <label>С <input id="f-from" type="datetime-local"></label>
         <label>По <input id="f-to" type="datetime-local"></label>
-        <label class="check"><input id="f-images" type="checkbox"> Только с фото</label>
+        <label class="check"><input id="f-images" type="checkbox" checked> Только с фото</label>
         <button id="f-reset" class="btn" type="button">Сбросить</button>
       </div>
+      <p id="f-hint" class="muted" style="margin:0">Показаны только события с фото. Остальные не удалены: уберите галочку «Только с фото», чтобы увидеть все.</p>
       <div class="card table-wrap">
         <table>
-          <thead><tr><th>№</th><th>Время</th><th>Тип</th><th>Устройство</th><th>IP</th><th>Файлы</th></tr></thead>
+          <thead><tr><th>Время</th><th>Сотрудник</th><th>Действие</th><th>Проверка</th><th>Устройство</th><th>Фото</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
-        <div id="empty" class="empty" hidden>Событий не найдено</div>
+        <div id="empty" class="empty" hidden></div>
       </div>
       <div><button id="more" class="btn" type="button" hidden>Загрузить ещё</button></div>
     </section>
@@ -172,6 +181,27 @@ const NO_TYPE = "__none__";
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp)$/i;
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+// Значения attendanceStatus и currentVerifyMode из событий контроллера доступа
+const ACTIONS = {
+  checkIn: ["Вход", "in"],
+  checkOut: ["Выход", "out"],
+  breakOut: ["Перерыв", "other"],
+  breakIn: ["С перерыва", "other"],
+  overTimeIn: ["Сверхурочные: вход", "in"],
+  overTimeOut: ["Сверхурочные: выход", "out"],
+};
+const VERIFY_MODES = {
+  card: "Карта",
+  face: "Лицо",
+  fp: "Отпечаток",
+  fingerPrint: "Отпечаток",
+  cardOrFace: "Карта или лицо",
+  cardAndFace: "Карта и лицо",
+  pw: "Пароль",
+  cardAndPw: "Карта и пароль",
+  faceAndPw: "Лицо и пароль",
+};
+
 const state = {
   token: sessionStorage.getItem(TOKEN_KEY) || "",
   events: [],
@@ -182,6 +212,7 @@ const state = {
   statsAt: 0,
   knownTypes: new Set(),
   blobUrls: [],
+  thumbs: new Map(),
 };
 
 const $ = (id) => document.getElementById(id);
@@ -240,6 +271,15 @@ function fmtSize(bytes) {
 
 const displayName = (stored) => stored.replace(/^[0-9a-f]{32}_/, "");
 
+const actionText = (action) => (action && ACTIONS[action] ? ACTIONS[action][0] : action || "");
+const verifyText = (mode) => (mode && VERIFY_MODES[mode] ? VERIFY_MODES[mode] : mode || "");
+
+function actionBadge(action) {
+  if (!action) return "—";
+  const info = ACTIONS[action];
+  return el("span", { class: "badge " + (info ? info[1] : "other") }, actionText(action));
+}
+
 /* ---------- вход и выход ---------- */
 
 function logout(message = "") {
@@ -273,6 +313,45 @@ $("login-form").addEventListener("submit", (event) => {
 });
 $("logout").addEventListener("click", () => logout());
 
+/* ---------- миниатюры фото в таблице ---------- */
+
+async function loadThumb(holder) {
+  const name = holder.dataset.file;
+  try {
+    let url = state.thumbs.get(name);
+    if (!url) {
+      const blob = await apiFetch("/dashboard/api/files/" + encodeURIComponent(name), {}, true);
+      url = URL.createObjectURL(blob);
+      state.thumbs.set(name, url);
+    }
+    holder.replaceChildren(el("img", { src: url, alt: "Фото", class: "mini" }));
+  } catch (err) {
+    holder.textContent = "нет";
+  }
+}
+
+// Фото грузим только когда строка попала на экран, чтобы не качать сотни снимков сразу
+const thumbObserver = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    thumbObserver.unobserve(entry.target);
+    loadThumb(entry.target);
+  }
+}, { rootMargin: "200px" });
+
+function clearThumbs() {
+  state.thumbs.forEach((url) => URL.revokeObjectURL(url));
+  state.thumbs.clear();
+}
+
+function thumbCell(images) {
+  const photo = images.find((name) => IMAGE_EXT.test(name));
+  if (!photo) return el("div", { class: "mini-box" }, images.length ? "файл" : "нет");
+  const box = el("div", { class: "mini-box", "data-file": photo }, "...");
+  thumbObserver.observe(box);
+  return box;
+}
+
 /* ---------- список событий ---------- */
 
 function isoOrEmpty(localValue) {
@@ -293,12 +372,12 @@ function currentFilters() {
 
 function rowNode(ev, fresh) {
   const tr = el("tr", { class: "row" + (fresh ? " fresh" : ""), tabindex: "0" },
-    el("td", {}, String(ev.id)),
     el("td", { class: "nowrap" }, fmtTime(ev.received_at)),
-    el("td", {}, ev.event_type || "—"),
+    el("td", { class: "name" }, ev.employee || "—"),
+    el("td", {}, actionBadge(ev.action)),
+    el("td", {}, verifyText(ev.verify) || "—"),
     el("td", {}, ev.device || "—"),
-    el("td", {}, ev.client_ip || "—"),
-    el("td", {}, ev.images.length ? String(ev.images.length) : ""),
+    el("td", {}, thumbCell(ev.images)),
   );
   tr.addEventListener("click", () => openEvent(ev.id));
   tr.addEventListener("keydown", (e) => { if (e.key === "Enter") openEvent(ev.id); });
@@ -306,7 +385,12 @@ function rowNode(ev, fresh) {
 }
 
 function updateListState() {
+  const onlyPhotos = $("f-images").checked;
+  $("f-hint").hidden = !onlyPhotos;
   $("empty").hidden = state.events.length > 0;
+  $("empty").textContent = onlyPhotos
+    ? "Событий с фото не найдено. Уберите галочку «Только с фото», чтобы увидеть остальные."
+    : "Событий не найдено";
   $("more").hidden = !state.hasMore;
 }
 
@@ -315,6 +399,7 @@ async function reloadEvents() {
   try {
     const data = await apiFetch("/dashboard/api/events", { ...currentFilters(), limit: PAGE_SIZE });
     if (gen !== state.generation) return;
+    clearThumbs();
     state.events = data.events;
     state.hasMore = data.has_more;
     $("rows").replaceChildren(...state.events.map((ev) => rowNode(ev, false)));
@@ -400,7 +485,8 @@ $("f-reset").addEventListener("click", () => {
   $("f-type").value = "";
   $("f-from").value = "";
   $("f-to").value = "";
-  $("f-images").checked = false;
+  // По умолчанию показываем только события с фото
+  $("f-images").checked = true;
   reloadEvents();
 });
 $("more").addEventListener("click", loadMore);
@@ -420,6 +506,13 @@ const section = (title, ...content) => el("section", {}, el("h3", {}, title), ..
 const collapsible = (title, ...content) => el("details", {}, el("summary", {}, title), ...content);
 const pre = (text) => el("pre", {}, text);
 const itemText = (item) => (typeof item === "string" ? item : JSON.stringify(item, null, 2));
+
+// Данные контроллера доступа из первого элемента payload (если это он)
+function accessInfo(ev) {
+  const first = ev.payload[0];
+  const info = first && typeof first === "object" ? first.AccessControllerEvent : null;
+  return info && typeof info === "object" ? info : {};
+}
 
 async function loadFile(storedName, holder) {
   try {
@@ -460,9 +553,15 @@ function partNode(part) {
 }
 
 function detailNodes(ev) {
+  const info = accessInfo(ev);
   const nodes = [
     section("Общее", kvTable([
       ["Получено", fmtTime(ev.received_at)],
+      ["Сотрудник", info.name],
+      ["Номер сотрудника", info.employeeNoString],
+      ["Действие", actionText(info.attendanceStatus || info.label)],
+      ["Проверка", verifyText(info.currentVerifyMode)],
+      ["Устройство", info.deviceName],
       ["Тип события", ev.event_type],
       ["IP отправителя", ev.client_ip],
       ["Метод", ev.method],

@@ -10,17 +10,32 @@ from db import HikEvent, SessionLocal
 NO_TYPE = "__none__"
 NO_TYPE_LABEL = "(без типа)"
 
+# У контроллеров доступа вся полезная информация лежит внутри AccessControllerEvent,
+# а на верхнем уровне только IP устройства.
+ACE = "AccessControllerEvent"
+
+
+def _ace(field: str):
+    return HikEvent.payload[(0, ACE, field)].astext
+
+
 # Где в payload искать название устройства (по порядку). Если ни одного поля
-# нет, берём IP отправителя. У контроллеров доступа имя лежит внутри
-# AccessControllerEvent (например, "MADO"), а на верхнем уровне только IP.
+# нет, берём IP отправителя.
 DEVICE_PATHS = (
-    (0, "AccessControllerEvent", "deviceName"),
+    (0, ACE, "deviceName"),
     (0, "deviceName"),
     (0, "devName"),
     (0, "srcName"),
     (0, "ipAddress"),
 )
 DEVICE = func.coalesce(*[HikEvent.payload[path].astext for path in DEVICE_PATHS], HikEvent.client_ip)
+
+# Сотрудник: имя, а если его нет, табельный номер
+EMPLOYEE = func.coalesce(_ace("name"), _ace("employeeNoString"))
+# Вход или выход (attendanceStatus), запасной вариант - подпись label
+ACTION = func.coalesce(_ace("attendanceStatus"), _ace("label"))
+# Как прошёл проверку: карта, лицо и т.д.
+VERIFY = _ace("currentVerifyMode")
 
 
 @dataclass(frozen=True)
@@ -71,6 +86,9 @@ def _list_item(row: Row) -> dict:
         "content_type": row.content_type,
         "images": row.images or [],
         "device": row.device,
+        "employee": row.employee,
+        "action": row.action,
+        "verify": row.verify,
     }
 
 
@@ -91,6 +109,9 @@ async def list_events(
         HikEvent.content_type,
         HikEvent.images,
         DEVICE.label("device"),
+        EMPLOYEE.label("employee"),
+        ACTION.label("action"),
+        VERIFY.label("verify"),
     )
     stmt = _apply_filters(stmt, filters)
     if after_id is not None:
