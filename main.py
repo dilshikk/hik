@@ -12,7 +12,11 @@
 multipart (JSON/XML и файлы любого типа). Сам токен в базу не попадает.
 
 Панель просмотра событий: /dashboard (доступ по DASHBOARD_TOKEN, см. dashboard.py).
+
+Если задан ATTENDANCE_DATABASE_URL, каждый проход сотрудника дополнительно
+пишется в базу посещаемости (см. attendance.py).
 """
+import asyncio
 import hmac
 import json
 import logging
@@ -25,6 +29,7 @@ from urllib.parse import urlencode
 from fastapi import Depends, FastAPI, HTTPException, Request
 from starlette.datastructures import UploadFile
 
+from attendance import forward_payload
 from config import FILES_DIR
 from dashboard import router as dashboard_router
 from db import init_db, save_event
@@ -41,6 +46,9 @@ TOKEN_HEADER = "x-gateway-token"
 TOKEN_PARAM = "token"
 
 TEXT_TYPES = ("application/json", "application/xml", "text/")
+
+# Ссылки на фоновые задачи, иначе их может собрать сборщик мусора до завершения
+BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
 @asynccontextmanager
@@ -94,6 +102,13 @@ def save_file(data: bytes, original_name: str) -> str:
     filename = f"{uuid.uuid4().hex}_{Path(original_name).name}"
     (FILES_DIR / filename).write_bytes(data)
     return filename
+
+
+def forward_in_background(payload: list) -> None:
+    """Пересылка в базу посещаемости не должна задерживать ответ камере."""
+    task = asyncio.create_task(forward_payload(payload))
+    BACKGROUND_TASKS.add(task)
+    task.add_done_callback(BACKGROUND_TASKS.discard)
 
 
 async def read_multipart(request: Request) -> tuple[list, list, list[str]]:
@@ -158,6 +173,7 @@ async def hikvision_webhook(request: Request) -> dict:
             payload=payload,
             files=files,
         )
+        forward_in_background(payload)
         logger.info("Hikvision event from %s: %s | files: %s", client_ip, payload, files)
     except Exception:
         # Ошибка разбора или БД не должна приводить к повторной отправке события
