@@ -13,3 +13,10 @@ DASHBOARD_TOKEN = os.environ.get("DASHBOARD_TOKEN", "")
 # База посещаемости FaceID (resto). Если не задана, пересылка отключена.
 # Формат: postgresql+asyncpg://user:password@host:5432/dbname
 ATTENDANCE_DATABASE_URL = os.environ.get("ATTENDANCE_DATABASE_URL", "")
+
+# Уведомления о проходах в Telegram-группу. Если одна из переменных не
+# задана, отправка отключена (шлюз при этом работает как обычно).
+# TELEGRAM_BOT_TOKEN - токен бота от @BotFather.
+# TELEGRAM_CHAT_ID - id группы/канала (бот должен быть добавлен туда как участник/админ).
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
