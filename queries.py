@@ -6,8 +6,7 @@ from sqlalchemy import Row, Select, Text, cast, func, or_, select
 
 from db import HikEvent, SessionLocal
 
-# Значение фильтра "события без типа"
-NO_TYPE = "__none__"
+# Значение фильтра "события без типа" (используется только в статистике)
 NO_TYPE_LABEL = "(без типа)"
 
 # У контроллеров доступа вся полезная информация лежит внутри AccessControllerEvent,
@@ -37,10 +36,16 @@ ACTION = func.coalesce(_ace("attendanceStatus"), _ace("label"))
 # Как прошёл проверку: карта, лицо и т.д.
 VERIFY = _ace("currentVerifyMode")
 
+# Коды значений ACTION, которые считаются входом/выходом.
+# Должно соответствовать объекту ACTIONS в static/dashboard.html.
+ACTION_IN_CODES = ("checkIn", "overTimeIn")
+ACTION_OUT_CODES = ("checkOut", "overTimeOut")
+ACTION_CODES_BY_FILTER = {"in": ACTION_IN_CODES, "out": ACTION_OUT_CODES}
+
 
 @dataclass(frozen=True)
 class EventFilters:
-    event_type: str | None = None
+    action: str | None = None  # "in" | "out" | None (все)
     date_from: datetime | None = None
     date_to: datetime | None = None
     query: str | None = None
@@ -54,10 +59,9 @@ def _like_pattern(value: str) -> str:
 
 
 def _apply_filters(stmt: Select, filters: EventFilters) -> Select:
-    if filters.event_type == NO_TYPE:
-        stmt = stmt.where(HikEvent.event_type.is_(None))
-    elif filters.event_type:
-        stmt = stmt.where(HikEvent.event_type == filters.event_type)
+    codes = ACTION_CODES_BY_FILTER.get(filters.action or "")
+    if codes:
+        stmt = stmt.where(ACTION.in_(codes))
     if filters.date_from:
         stmt = stmt.where(HikEvent.received_at >= filters.date_from)
     if filters.date_to:
